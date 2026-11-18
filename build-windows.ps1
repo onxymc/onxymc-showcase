@@ -10,7 +10,6 @@ Set-Location $PSScriptRoot
 npm ci
 node scripts/make-test-packs.mjs test-packs
 npm test
-Push-Location src-tauri; cargo test; Pop-Location
 
 npx tauri build
 

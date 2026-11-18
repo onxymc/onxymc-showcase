@@ -9,9 +9,9 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -30,9 +30,11 @@ jobs:
           node scripts/make-test-packs.mjs test-packs
           npm test
 
-      - name: Rust tests
+      # Rust tests run on Linux: Tauri test executables lack the Windows common-controls
+      # manifest and exit with STATUS_ENTRYPOINT_NOT_FOUND on Windows runners.
+      - name: Rust type-check
         working-directory: src-tauri
-        run: cargo test
+        run: cargo check
 
       - name: Build installer (NSIS + MSI)
         run: npx tauri build
