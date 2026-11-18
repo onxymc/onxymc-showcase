@@ -11,6 +11,7 @@ import { invalidatePack, decodePng } from "../core/packAccess";
 import { installWithPrompts } from "../core/install";
 import type { PackLinks, PackRecord } from "../core/types";
 import { normalizeShowcase, uid } from "../core/showcase";
+import { usePointerReorder, moveInList } from "../ui/usePointerReorder";
 
 type Sort = "custom" | "name" | "added" | "viewed" | "format";
 
@@ -147,16 +148,9 @@ function VirtualGrid({ items, onOpen }: { items: PackRecord[]; onOpen: (p: PackR
 function VirtualList({ items, onOpen, draggable }: { items: PackRecord[]; onOpen: (p: PackRecord) => void; draggable: boolean }) {
   const parent = useRef<HTMLDivElement>(null);
   const v = useVirtualizer({ count: items.length, getScrollElement: () => parent.current, estimateSize: () => 60, overscan: 6 });
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [overId, setOverId] = useState<string | null>(null);
   const reorder = useApp((s) => s.reorderPacks);
   const update = useApp((s) => s.updatePack);
-  const drop = (target: string) => {
-    if (!dragId || dragId === target) return;
-    const ids = items.map((p) => p.id).filter((id) => id !== dragId);
-    ids.splice(ids.indexOf(target), 0, dragId);
-    reorder(ids);
-  };
+  const { itemProps } = usePointerReorder((from, to, after) => reorder(moveInList(items, from, to, after).map((p) => p.id)), draggable);
   return (
     <div ref={parent} className="panel" style={{ flex: 1, overflow: "auto", minHeight: 0, marginBottom: 24 }}>
       <div style={{ height: v.getTotalSize(), position: "relative" }}>
@@ -165,23 +159,10 @@ function VirtualList({ items, onOpen, draggable }: { items: PackRecord[]; onOpen
           return (
             <div
               key={p.id}
-              className="pack-list-row"
-              style={{ position: "absolute", top: 0, left: 0, right: 0, transform: `translateY(${r.start}px)`, borderTop: overId === p.id ? "2px solid var(--accent)" : undefined }}
+              {...itemProps(p.id)}
+              className={`pack-list-row ${itemProps(p.id).className}`}
+              style={{ position: "absolute", top: 0, left: 0, right: 0, transform: `translateY(${r.start}px)` }}
               onClick={() => onOpen(p)}
-              draggable={draggable}
-              onDragStart={() => setDragId(p.id)}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setOverId(p.id);
-              }}
-              onDragEnd={() => {
-                setDragId(null);
-                setOverId(null);
-              }}
-              onDrop={() => {
-                drop(p.id);
-                setOverId(null);
-              }}
             >
               {p.iconDataUrl ? <img className="icon" src={p.iconDataUrl} alt="" /> : <div />}
               <div style={{ minWidth: 0 }}>

@@ -13,6 +13,7 @@ import { BASE_STYLE, FONTS, TEMPLATES, applyTemplate, normalizeShowcase, makeCol
 import { getPackView } from "../core/packAccess";
 import { blobToDataUrl } from "../core/importer";
 import { ExportDialog } from "./ExportDialog";
+import { usePointerReorder, moveInList, moveBy } from "../ui/usePointerReorder";
 import { saveBytes } from "../platform";
 
 export function Creator() {
@@ -347,49 +348,9 @@ function Editor({ initial }: { initial: Showcase }) {
 
 type EditFn = (fn: (s: Showcase) => Showcase, key?: string) => void;
 
-function useDnd<T extends { id: string }>(items: T[], onMove: (from: string, to: string) => void) {
-  const [drag, setDrag] = useState<string | null>(null);
-  const [over, setOver] = useState<string | null>(null);
-  const props = (id: string) => ({
-    draggable: true,
-    onDragStart: (e: React.DragEvent) => {
-      setDrag(id);
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", id);
-    },
-    onDragOver: (e: React.DragEvent) => {
-      if (!drag) return;
-      e.preventDefault();
-      setOver(id);
-    },
-    onDragEnd: () => {
-      setDrag(null);
-      setOver(null);
-    },
-    onDrop: (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (drag && drag !== id) onMove(drag, id);
-      setDrag(null);
-      setOver(null);
-    },
-    className: over === id && drag !== id ? "drag-over" : "",
-  });
-  void items;
-  return props;
-}
-
-function moveItem<T extends { id: string }>(list: T[], from: string, to: string): T[] {
-  const a = [...list];
-  const i = a.findIndex((x) => x.id === from);
-  const [it] = a.splice(i, 1);
-  a.splice(a.findIndex((x) => x.id === to), 0, it);
-  return a;
-}
-
 function RowsPanel({ sc, edit, editRow, sel, setSel }: { sc: Showcase; edit: EditFn; editRow: (id: string, p: Partial<ShowcaseRow>, k?: string) => void; sel: Selection; setSel: (s: Selection) => void }) {
   const packs = useApp((s) => s.packs);
-  const dnd = useDnd(sc.rows, (from, to) => edit((s) => ({ ...s, rows: moveItem(s.rows, from, to) })));
+  const { itemProps } = usePointerReorder((from, to, after) => edit((s) => ({ ...s, rows: moveInList(s.rows, from, to, after) })));
   const [adding, setAdding] = useState(false);
   return (
     <div className="col" style={{ gap: 8 }}>
@@ -411,10 +372,10 @@ function RowsPanel({ sc, edit, editRow, sel, setSel }: { sc: Showcase; edit: Edi
       )}
       <div className="dnd-list">
         {sc.rows.map((r) => {
-          const d = dnd(r.id);
+          const d = itemProps(r.id);
           const on = sel?.type === "row" && sel.rowId === r.id;
           return (
-            <div key={r.id} {...d} className={`dnd-item ${d.className} ${on ? "sel" : ""}`} onClick={() => setSel({ type: "row", rowId: r.id })} data-row={r.name}>
+            <div key={r.id} {...d} title="Drag to reorder" className={`dnd-item ${d.className} ${on ? "sel" : ""}`} onClick={() => setSel({ type: "row", rowId: r.id })} data-row={r.name}>
               <Icon name="grip" size={14} className="grip" />
               <span className="swatch" style={{ background: r.color }} />
               <span className="grow small" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: r.hidden ? 0.4 : 1 }}>
@@ -432,7 +393,7 @@ function RowsPanel({ sc, edit, editRow, sel, setSel }: { sc: Showcase; edit: Edi
 }
 
 function ColumnsPanel({ sc, edit, sel, setSel, onAdd }: { sc: Showcase; edit: EditFn; sel: Selection; setSel: (s: Selection) => void; onAdd: () => void }) {
-  const dnd = useDnd(sc.columns, (from, to) => edit((s) => ({ ...s, columns: moveItem(s.columns, from, to) })));
+  const { itemProps } = usePointerReorder((from, to, after) => edit((s) => ({ ...s, columns: moveInList(s.columns, from, to, after) })));
   const firstPack = sc.rows.find((r) => r.packId)?.packId ?? null;
   return (
     <div className="col" style={{ gap: 8 }}>
@@ -444,10 +405,10 @@ function ColumnsPanel({ sc, edit, sel, setSel, onAdd }: { sc: Showcase; edit: Ed
       </div>
       <div className="dnd-list">
         {sc.columns.map((c) => {
-          const d = dnd(c.id);
+          const d = itemProps(c.id);
           const on = sel?.type === "col" && sel.colId === c.id;
           return (
-            <div key={c.id} {...d} className={`dnd-item ${d.className} ${on ? "sel" : ""}`} onClick={() => setSel({ type: "col", colId: c.id })}>
+            <div key={c.id} {...d} title="Drag to reorder" className={`dnd-item ${d.className} ${on ? "sel" : ""}`} onClick={() => setSel({ type: "col", colId: c.id })}>
               <Icon name="grip" size={14} className="grip" />
               {c.key === SKY_COLUMN ? <Icon name="sky" size={20} /> : <TextureView packId={firstPack} itemKey={c.key.startsWith(CUSTOM_PREFIX) ? undefined : c.key} path={c.key.startsWith(CUSTOM_PREFIX) ? c.key.slice(CUSTOM_PREFIX.length) : undefined} size={22} />}
               <span className="grow small" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -489,6 +450,10 @@ function SelectionPanel({ sc, sel, editRow, edit, onPickCell }: { sc: Showcase; 
             <TextIn value={row.badge} onChange={(v) => editRow(row.id, { badge: v }, "badge")} maxLength={16} />
           </Field>
           <div className="row">
+            <Btn sm icon="undo" title="Move row up" onClick={() => edit((s) => ({ ...s, rows: moveBy(s.rows, row.id, -1) }))}>Move up</Btn>
+            <Btn sm icon="redo" title="Move row down" onClick={() => edit((s) => ({ ...s, rows: moveBy(s.rows, row.id, 1) }))}>Move down</Btn>
+          </div>
+          <div className="row">
             <Btn sm icon="copy" onClick={() => edit((s) => {
               const i = s.rows.findIndex((r) => r.id === row.id);
               const rows = [...s.rows];
@@ -507,6 +472,10 @@ function SelectionPanel({ sc, sel, editRow, edit, onPickCell }: { sc: Showcase; 
         <div className="col" style={{ gap: 10 }}>
           <div className="section-title">Item column</div>
           <div className="small">{columnLabel(col.key)} <span className="muted tiny mono">{col.key}</span></div>
+          <div className="row">
+            <Btn sm icon="undo" title="Move item left" onClick={() => edit((s) => ({ ...s, columns: moveBy(s.columns, col.id, -1) }))}>Move left</Btn>
+            <Btn sm icon="redo" title="Move item right" onClick={() => edit((s) => ({ ...s, columns: moveBy(s.columns, col.id, 1) }))}>Move right</Btn>
+          </div>
           <Field label="Custom label (column header)">
             <TextIn value={col.label} placeholder={columnLabel(col.key)} onChange={(v) => edit((s) => ({ ...s, columns: s.columns.map((c) => (c.id === col.id ? { ...c, label: v } : c)) }), `col.${col.id}`)} />
           </Field>

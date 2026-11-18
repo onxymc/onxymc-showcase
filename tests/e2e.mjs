@@ -88,6 +88,29 @@ await step("edit row name/colour + undo/redo", async () => {
   if (!(await page.locator('[data-row="Blossom"]').count())) throw new Error("redo failed");
 });
 
+await step("drag to reorder items and rows with the mouse", async () => {
+  const names = () => page.locator(".side:not(.right) .dnd-list").nth(1).locator(".dnd-item span.grow").allInnerTexts();
+  const before = await names();
+  const items = page.locator(".side:not(.right) .dnd-list").nth(1).locator(".dnd-item");
+  const a = await items.nth(0).boundingBox(), b = await items.nth(2).boundingBox();
+  await page.mouse.move(a.x + 60, a.y + a.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(a.x + 60, a.y + a.height / 2 + 10, { steps: 3 });
+  await page.mouse.move(b.x + 60, b.y + b.height * 0.8, { steps: 8 });
+  await page.mouse.up();
+  const after = await names();
+  const expected = [before[1], before[2], before[0], ...before.slice(3)];
+  if (JSON.stringify(after) !== JSON.stringify(expected)) throw new Error(`drag: ${before.slice(0, 3)} -> ${after.slice(0, 3)}`);
+  // Move up/down buttons on a selected row
+  const rows = () => page.locator("[data-row]").evaluateAll((els) => els.map((e) => e.getAttribute("data-row")));
+  const r0 = await rows();
+  await page.locator(`[data-row="${r0[1]}"]`).click();
+  await page.click('button[title="Move row up"]');
+  const r1 = await rows();
+  if (r1[0] !== r0[1]) throw new Error("move up failed");
+  await page.click('button[title="Undo (Ctrl+Z)"]');
+});
+
 await step("animated cell actually changes over time", async () => {
   const c = page.locator('[data-testid="showcase-canvas"]');
   const a = await c.screenshot();

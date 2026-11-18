@@ -22,7 +22,7 @@ import { SettingsView } from "./views/Settings";
 const Models3D = lazy(() => import("./views/Models3D"));
 const Skybox = lazy(() => import("./views/Skybox"));
 
-export const APP_VERSION = "1.0.0";
+export const APP_VERSION = "1.0.1";
 
 const NAV: { group?: string; id: ViewId; label: string; icon: string }[] = [
   { group: "Overview", id: "dashboard", label: "Dashboard", icon: "home" },
